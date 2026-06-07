@@ -9,10 +9,14 @@ import re
 
 app = FastAPI(title="Pro Tag-Isolated RAG Backend")
 
-# Enable wide open CORS policies so your GitHub Pages frontend can connect cleanly
+# STRICT CORS RULE CORRECTIONS: Explicitly whitelisting your GitHub Pages origin domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://simhadri9991.github.io",
+        "http://simhadri9991.github.io",
+        "https://simhadri9991.github.io/python-chat-bot"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

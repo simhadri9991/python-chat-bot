@@ -1,74 +1,352 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-import google.generativeai as genai
-import time
-import os
-import re
-
-app = FastAPI(title="Pro Tag-Isolated RAG Backend")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# DYNAMIC PATH RESOLUTION
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE_PATH = os.path.join(BASE_DIR, "sample_data.txt")
-
-@app.get("/", response_class=HTMLResponse)
-async def serve_frontend():
-    return HTMLResponse(content="<h1>Python Chat Bot Backend Active</h1>", status_code=200)
-
-class TagIsolatedSearchEngine:
-    def __init__(self, data_path: str):
-        self.data_path = data_path
-        self.topics_index = {}
-        self.raw_text = ""
-        self._load_and_parse_topics()
-
-    def _load_and_parse_topics(self):
-        try:
-            if os.path.exists(self.data_path):
-                with open(self.data_path, "r", encoding="utf-8") as f:
-                    self.raw_text = f.read()
-            # Regex to find tags
-            topic_blocks = re.findall(r"\\?\[START:\s*(\w+)\\?\]([\s\S]+?)\\?\[END:\s*\1\\?\]", self.raw_text)
-            for topic_name, topic_content in topic_blocks:
-                self.topics_index[topic_name.strip().lower()] = topic_content.strip()
-        except Exception:
-            pass
-
-    def search(self, query: str) -> tuple:
-        q_clean = query.strip().lower()
-        for keyword in self.topics_index.keys():
-            if keyword in q_clean:
-                return self.topics_index[keyword], keyword
-        return self.raw_text[:1000], None
-
-engine = TagIsolatedSearchEngine(DATA_FILE_PATH)
-
-class QueryRequest(BaseModel):
-    question: str
-    apiKey: str = ""
-
-@app.post("/ask")
-async def ask_rag(request: QueryRequest):
-    context_text, topic = engine.search(request.question)
-    api_key = request.apiKey.strip() or os.environ.get("GEMINI_API_KEY", "")
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python AI chat Bot</title>
     
-    if not api_key:
-        return {"answer": f"### Local Match\n{context_text}", "online": False}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(f"Context: {context_text}\n\nQuestion: {request.question}")
-        return {"answer": response.text, "online": True}
-    except Exception as e:
-        return {"answer": f"Error: {str(e)}", "online": False}
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] },
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #030712; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* High-fidelity markdown custom rendering styling */
+        .markdown-body pre { 
+            background: #090d16 !important; 
+            padding: 1.25rem; 
+            border-radius: 0.75rem; 
+            border: 1px solid rgba(255, 255, 255, 0.06); 
+            overflow-x: auto; 
+            margin: 1.25rem 0; 
+            position: relative;
+        }
+        .markdown-body code { 
+            font-family: 'Courier New', Courier, monospace; 
+            color: #818cf8; 
+            font-size: 0.925em; 
+            padding: 0.15rem 0.35rem;
+            background: rgba(129, 140, 248, 0.08);
+            border: 1px solid rgba(129, 140, 248, 0.15);
+            border-radius: 0.375rem;
+        }
+        .markdown-body pre code {
+            background: transparent !important;
+            border: none !important;
+            padding: 0;
+            color: #f3f4f6;
+        }
+        .markdown-body p { margin-bottom: 1.125rem; line-height: 1.75; color: #cbd5e1; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.125rem; }
+        .markdown-body ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1.125rem; }
+        .markdown-body li { margin-bottom: 0.5rem; color: #cbd5e1; }
+        .markdown-body h3 { font-size: 1.25rem; font-weight: 700; margin-top: 1.75rem; margin-bottom: 0.875rem; color: #f9fafb; }
+        .markdown-body h4 { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #f3f4f6; }
+    </style>
+</head>
+<body class="text-slate-100 h-screen w-screen overflow-hidden antialiased font-sans relative">
+
+    <div class="absolute top-[-20%] left-[-20%] w-[65%] h-[65%] rounded-full bg-indigo-600/10 blur-[160px] pointer-events-none"></div>
+    <div class="absolute bottom-[-20%] right-[-20%] w-[65%] h-[65%] rounded-full bg-violet-600/10 blur-[160px] pointer-events-none"></div>
+
+    <div class="relative flex h-full w-full overflow-hidden">
+
+        <div id="settingsDrawer" class="fixed inset-y-0 right-0 w-80 glass-panel border-l border-white/10 z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between p-6 shadow-2xl">
+            <div>
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 flex items-center space-x-2.5">
+                        <i data-lucide="sliders-horizontal" class="h-4 w-4 text-indigo-400"></i>
+                        <span>System Settings</span>
+                    </h2>
+                    <button onclick="toggleSettings()" class="text-slate-400 hover:text-white transition">
+                        <i data-lucide="x" class="h-5 w-5"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wide">Google Gemini Key</label>
+                    <input type="password" id="apiKeyInput" placeholder="Paste AIzaSy... key here" 
+                           oninput="saveApiKey()" 
+                           class="w-full bg-slate-950/80 border border-white/10 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200">
+                    <p class="text-[11px] text-slate-500 leading-relaxed">
+                        Setting your key unlocks premium conversational reasoning, formatting, and high-fidelity code snippet blocks.
+                    </p>
+                </div>
+
+                <div class="border-t border-white/5 pt-6 mt-6 space-y-4">
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-400">Database Diagnostics</h3>
+                    <div class="space-y-3.5 text-xs bg-slate-950/60 rounded-xl p-4 border border-white/5">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Vector Engine:</span>
+                            <span class="text-indigo-400 font-semibold">ChromaDB (In-Memory)</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Search Status:</span>
+                            <span class="text-emerald-400 font-semibold">Clean Tag-Isolated</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Latency Calc:</span>
+                            <span id="latencyStat" class="text-indigo-400 font-semibold">0ms</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Response Pipeline:</span>
+                            <span id="modeStat" class="text-amber-500 font-semibold">Local Only</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-[11px] text-slate-600 border-t border-white/5 pt-4 text-center">
+                Sandbox Pro Workspace v1.8
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col h-full relative">
+            
+            <div class="h-16 border-b border-white/5 px-8 flex items-center justify-between backdrop-blur-md bg-slate-950/30 sticky top-0 z-10">
+                <div class="flex items-center space-x-3.5">
+                    <div class="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/20">
+                        <i data-lucide="cpu" class="h-4.5 w-4.5 text-white"></i>
+                    </div>
+                    <div>
+                        <span class="text-sm font-semibold tracking-tight text-white block">Python Professor</span>
+                        <span id="headerBadge" class="text-[10px] text-amber-500 font-semibold flex items-center">
+                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block mr-1.5"></span>
+                            Local Core Active
+                        </span>
+                    </div>
+                </div>
+                
+                <button onclick="toggleSettings()" class="h-9 px-4 rounded-xl border border-white/5 hover:border-white/10 bg-white/5 text-slate-300 hover:text-white text-xs flex items-center space-x-2 transition-all duration-150 active:scale-95">
+                    <i data-lucide="key" class="h-3.5 w-3.5 text-indigo-400"></i>
+                    <span>Pro Configuration</span>
+                </button>
+            </div>
+
+            <div id="messageStream" class="flex-1 overflow-y-auto px-6 py-12 space-y-10 pb-44">
+                
+                <div class="max-w-2xl mx-auto text-center space-y-8 my-12 animate-fadeIn">
+                    <div class="inline-flex h-14 w-14 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 items-center justify-center text-indigo-400 shadow-2xl shadow-indigo-600/10">
+                        <i data-lucide="sparkles" class="h-7 w-7"></i>
+                    </div>
+                    <div class="space-y-3">
+                        <h1 class="text-3xl font-extrabold tracking-tight text-white">Pro Study Assistant</h1>
+                    </div>
+
+                    <div class="flex flex-wrap justify-center gap-2.5 pt-4">
+                        <button onclick="fillAndSubmit('what is oops')" class="px-4.5 py-2.5 rounded-xl border border-white/5 hover:border-white/10 bg-white/5 hover:bg-indigo-600/10 text-xs text-slate-300 transition-all duration-200 active:scale-95 font-medium font-semibold hover:text-white">
+                            What is OOP?
+                        </button>
+                        <button onclick="fillAndSubmit('what is variable')" class="px-4.5 py-2.5 rounded-xl border border-white/5 hover:border-white/10 bg-white/5 hover:bg-indigo-600/10 text-xs text-slate-300 transition-all duration-200 active:scale-95 font-medium font-semibold hover:text-white">
+                            What is a Variable?
+                        </button>
+                        <button onclick="fillAndSubmit('what are tuples')" class="px-4.5 py-2.5 rounded-xl border border-white/5 hover:border-white/10 bg-white/5 hover:bg-indigo-600/10 text-xs text-slate-300 transition-all duration-200 active:scale-95 font-medium font-semibold hover:text-white">
+                            What are Tuples?
+                        </button>
+                        <button onclick="fillAndSubmit('what is sets')" class="px-4.5 py-2.5 rounded-xl border border-white/5 hover:border-white/10 bg-white/5 hover:bg-indigo-600/10 text-xs text-slate-300 transition-all duration-200 active:scale-95 font-medium font-semibold hover:text-white">
+                            What are Sets?
+                        </button>
+                        <button onclick="fillAndSubmit('what are functions')" class="px-4.5 py-2.5 rounded-xl border border-white/5 hover:border-white/10 bg-white/5 hover:bg-indigo-600/10 text-xs text-slate-300 transition-all duration-200 active:scale-95 font-medium font-semibold hover:text-white">
+                            What are Functions?
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#030712] via-[#030712]/95 to-transparent pt-14 pb-8 px-6">
+                <div class="max-w-2xl mx-auto relative">
+                    <div class="relative bg-slate-900/85 border border-white/5 rounded-2xl shadow-2xl overflow-hidden focus-within:border-indigo-500/60 transition-all duration-200">
+                        <input type="text" id="userInput" class="w-full bg-transparent border-0 py-5 pl-6 pr-16 text-sm text-slate-100 placeholder-slate-500 focus:outline-none" placeholder="Ask anything about Python development..." onkeypress="handleKeyPress(event)">
+                        <button onclick="sendMessage()" class="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-600/20 active:scale-95 transition-all duration-150">
+                            <i data-lucide="arrow-up" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-center space-x-3 mt-3.5 text-[10px] text-slate-600 tracking-wider uppercase font-semibold">
+                        <span>Tag-Isolated Memory Routing</span>
+                        <span>•</span>
+                        <span>High-Precision Fallback Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize external icons
+        lucide.createIcons();
+
+        // UI Controls
+        function toggleSettings() {
+            const drawer = document.getElementById('settingsDrawer');
+            if (drawer.classList.contains('translate-x-full')) {
+                drawer.classList.remove('translate-x-full');
+            } else {
+                drawer.classList.add('translate-x-full');
+            }
+        }
+
+        // Local Storage and State Management
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('gemini_api_key') || '';
+            document.getElementById('apiKeyInput').value = savedKey;
+            updateBadgeState(savedKey);
+        });
+
+        function saveApiKey() {
+            const keyVal = document.getElementById('apiKeyInput').value.trim();
+            localStorage.setItem('gemini_api_key', keyVal);
+            updateBadgeState(keyVal);
+        }
+
+        function updateBadgeState(key) {
+            const headerBadge = document.getElementById('headerBadge');
+            const modeStat = document.getElementById('modeStat');
+            if (key.length > 5) {
+                headerBadge.innerHTML = `<span class="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block mr-1.5 animate-pulse"></span>Pro Engine Active`;
+                headerBadge.className = "text-[10px] text-emerald-400 font-semibold flex items-center";
+                modeStat.innerText = "Pro Conversational";
+                modeStat.className = "text-emerald-400 font-semibold";
+            } else {
+                headerBadge.innerHTML = `<span class="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block mr-1.5"></span>Local Core Active`;
+                headerBadge.className = "text-[10px] text-amber-500 font-semibold flex items-center";
+                modeStat.innerText = "Local Fallback";
+                modeStat.className = "text-amber-500 font-semibold";
+            }
+        }
+
+        // Message Handling Logic
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function fillAndSubmit(text) {
+            document.getElementById('userInput').value = text;
+            sendMessage();
+        }
+
+        async function sendMessage() {
+            const inputField = document.getElementById('userInput');
+            const userText = inputField.value.trim();
+            const stream = document.getElementById('messageStream');
+            
+            if (!userText) return;
+
+            // Render Premium User Bubble Card
+            stream.innerHTML += `
+                <div class="max-w-2xl mx-auto flex flex-col items-end space-y-1.5 animate-fadeIn">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-1">You</span>
+                    <div class="bg-indigo-600/10 border border-indigo-500/15 text-slate-200 rounded-2xl px-6 py-4 text-sm max-w-[85%] leading-relaxed">
+                        ${userText}
+                    </div>
+                </div>
+            `;
+            
+            inputField.value = '';
+            stream.scrollTop = stream.scrollHeight;
+
+            // Render Custom Glassmorphic Loading Indicator
+            const tempId = 'loading-' + Date.now();
+            stream.innerHTML += `
+                <div class="max-w-2xl mx-auto flex space-x-4 animate-pulse pt-6" id="${tempId}">
+                    <div class="h-9 w-9 rounded-xl bg-indigo-950/30 border border-indigo-800/20 flex items-center justify-center text-indigo-400 shrink-0">
+                        <i data-lucide="cpu" class="h-4.5 w-4.5"></i>
+                    </div>
+                    <div class="flex-1 space-y-2.5 pt-2">
+                        <div class="h-3.5 bg-slate-800 rounded w-1/4"></div>
+                        <div class="h-2.5 bg-slate-900 rounded w-full"></div>
+                        <div class="h-2.5 bg-slate-900 rounded w-2/3"></div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            stream.scrollTop = stream.scrollHeight;
+
+            const activeApiKey = document.getElementById('apiKeyInput').value.trim();
+
+            try {
+                // REDIRECT TARGET POINTING TO YOUR PROD VERCEL SERVERLESS BACKEND LINK
+                const response = await fetch('https://python-chat-bot-lac.vercel.app/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        question: userText,
+                        apiKey: activeApiKey
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById(tempId).remove();
+
+                if (data.latency_ms !== undefined) {
+                    document.getElementById('latencyStat').innerText = data.latency_ms + 'ms';
+                }
+
+                // Parse standard markdown strings to HTML safely
+                const cleanHTML = marked.parse(data.answer || data.detail);
+
+                // Render Bot Response
+                stream.innerHTML += `
+                    <div class="max-w-2xl mx-auto flex space-x-4 pt-6 animate-fadeIn">
+                        <div class="h-9 w-9 rounded-xl bg-indigo-950/50 border border-indigo-800/20 flex items-center justify-center text-indigo-400 shrink-0">
+                            <i data-lucide="bot" class="h-4.5 w-4.5"></i>
+                        </div>
+                        <div class="flex-1 text-sm text-slate-300 pt-0.5 markdown-body overflow-hidden">
+                            ${cleanHTML}
+                        </div>
+                    </div>
+                `;
+                
+                // Re-apply Syntax Highlighting
+                Prism.highlightAll();
+                
+            } catch (error) {
+                document.getElementById(tempId).remove();
+                stream.innerHTML += `
+                    <div class="max-w-2xl mx-auto flex space-x-4 pt-6">
+                        <div class="h-9 w-9 rounded-xl bg-rose-950/20 border border-rose-900/30 flex items-center justify-center text-rose-400 shrink-0">
+                            <i data-lucide="alert-octagon" class="h-4.5 w-4.5"></i>
+                        </div>
+                        <div class="flex-1 text-sm text-rose-400 pt-1 font-semibold">
+                            Backend Connection Loss: Ensure your cloud server is running, or verify your Vercel deployment link configurations.
+                        </div>
+                    </div>
+                `;
+            }
+
+            lucide.createIcons();
+            stream.scrollTop = stream.scrollHeight;
+        }
+    </script>
+</body>
+</html>

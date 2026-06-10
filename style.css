@@ -1,0 +1,52 @@
+body { 
+    background-color: #030712; 
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+/* Glassmorphism Effect */
+.glass-panel {
+    background: rgba(17, 24, 39, 0.7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* High-fidelity markdown custom rendering styling */
+.markdown-body pre { 
+    background: #090d16 !important; 
+    padding: 1.25rem; 
+    border-radius: 0.75rem; 
+    border: 1px solid rgba(255, 255, 255, 0.06); 
+    overflow-x: auto; 
+    margin: 1.25rem 0; 
+    position: relative;
+}
+
+.markdown-body code { 
+    font-family: 'Courier New', Courier, monospace; 
+    color: #818cf8; 
+    font-size: 0.925em; 
+    padding: 0.15rem 0.35rem;
+    background: rgba(129, 140, 248, 0.08);
+    border: 1px solid rgba(129, 140, 248, 0.15);
+    border-radius: 0.375rem;
+}
+
+.markdown-body pre code {
+    background: transparent !important;
+    border: none !important;
+    padding: 0;
+    color: #f3f4f6;
+}
+
+.markdown-body p { margin-bottom: 1.125rem; line-height: 1.75; color: #cbd5e1; }
+.markdown-body ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.125rem; }
+.markdown-body ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1.125rem; }
+.markdown-body li { margin-bottom: 0.5rem; color: #cbd5e1; }
+.markdown-body h3 { font-size: 1.25rem; font-weight: 700; margin-top: 1.75rem; margin-bottom: 0.875rem; color: #f9fafb; }
+.markdown-body h4 { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #f3f4f6; }

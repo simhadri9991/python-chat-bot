@@ -9,33 +9,22 @@ import re
 
 app = FastAPI(title="Pro Tag-Isolated RAG Backend")
 
-# STRICT CORS RULE CORRECTIONS: Explicitly whitelisting your GitHub Pages origin domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://simhadri9991.github.io",
-        "http://simhadri9991.github.io",
-        "https://simhadri9991.github.io/python-chat-bot"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# DYNAMIC PATH RESOLUTION
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE_PATH = os.path.join(BASE_DIR, "sample_data.txt")
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    try:
-        # Dynamic lookup for index.html if present
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        index_path = os.path.join(base_dir, "index.html")
-        if os.path.exists(index_path):
-            with open(index_path, "r", encoding="utf-8") as f:
-                return HTMLResponse(content=f.read(), status_code=200)
-        return HTMLResponse(content="<h1>Python Chat Bot Backend Active</h1><p>Production environment successfully linked.</p>", status_code=200)
-    except Exception:
-        return HTMLResponse(content="<h1>Python Chat Bot Backend Active</h1>", status_code=200)
+    return HTMLResponse(content="<h1>Python Chat Bot Backend Active</h1>", status_code=200)
 
-# 2. HIGH-PERFORMANCE TAG-ISOLATION ENGINE (SERVERLESS ROUTED)
 class TagIsolatedSearchEngine:
     def __init__(self, data_path: str):
         self.data_path = data_path
@@ -44,157 +33,51 @@ class TagIsolatedSearchEngine:
         self._load_and_parse_topics()
 
     def _load_and_parse_topics(self):
-        print(f"[Engine Setup] Loading and parsing topic tags from '{self.data_path}'...")
         try:
             if os.path.exists(self.data_path):
                 with open(self.data_path, "r", encoding="utf-8") as f:
                     self.raw_text = f.read()
-            else:
-                # Built-in robust runtime memory fallback text block if cloud system file locks engage
-                self.raw_text = (
-                    "[START: OOP]\nObject-Oriented Programming (OOP) master guide reference node.\n[END: OOP]\n\n"
-                    "[START: tuples]\nTuples are immutable sequence arrays defined using parentheses ().\n[END: tuples]\n\n"
-                    "[START: variables]\nVariables are named references acting as dynamic pointer tags to in-memory values.\n[END: variables]"
-                )
-        except Exception as e:
-            print(f"[Engine Setup Error] Failed to read {self.data_path}: {e}")
-            return
-
-        # Core regex engine parsing
-        topic_blocks = re.findall(r"\\?\[START:\s*(\w+)\\?\]([\s\S]+?)\\?\[END:\s*\1\\?\]", self.raw_text)
-        
-        for topic_name, topic_content in topic_blocks:
-            clean_name = topic_name.strip().lower()
-            self.topics_index[clean_name] = topic_content.strip()
-            
-        print(f"[Engine Setup] Isolated {len(self.topics_index)} exact topic nodes.")
+            # Regex to find tags
+            topic_blocks = re.findall(r"\\?\[START:\s*(\w+)\\?\]([\s\S]+?)\\?\[END:\s*\1\\?\]", self.raw_text)
+            for topic_name, topic_content in topic_blocks:
+                self.topics_index[topic_name.strip().lower()] = topic_content.strip()
+        except Exception:
+            pass
 
     def search(self, query: str) -> tuple:
         q_clean = query.strip().lower()
-        
-        # Route keywords directly to index keys
-        matched_keyword = None
-        if any(x in q_clean for x in ["oop", "object-oriented", "object oriented", "class"]):
-            matched_keyword = "oop"
-        elif "tuple" in q_clean or "tuples" in q_clean:
-            matched_keyword = "tuples"
-        elif "set" in q_clean or "sets" in q_clean:
-            matched_keyword = "sets"
-        elif "list" in q_clean or "lists" in q_clean:
-            matched_keyword = "lists"
-        elif any(x in q_clean for x in ["variable", "variables", "pointer", "label", "sticky note"]):
-            matched_keyword = "variables"
-        elif "decorator" in q_clean or "decorators" in q_clean or "wrapper" in q_clean:
-            matched_keyword = "decorators"
-        elif any(x in q_clean for x in ["memory", "garbage", "gc", "reference count"]):
-            matched_keyword = "memory"
-        elif any(x in q_clean for x in ["function", "functions", "scope", "legb", "closure"]):
-            matched_keyword = "functions"
-        elif "generator" in q_clean or "generators" in q_clean or "yield" in q_clean:
-            matched_keyword = "generators"
-        elif any(x in q_clean for x in ["dict", "dictionary", "dictionaries"]):
-            matched_keyword = "dictionaries"
+        for keyword in self.topics_index.keys():
+            if keyword in q_clean:
+                return self.topics_index[keyword], keyword
+        return self.raw_text[:1000], None
 
-        # Return exact block if found
-        if matched_keyword and matched_keyword in self.topics_index:
-            return self.topics_index[matched_keyword], matched_keyword
-
-        # Serverless Clean Fallback (Returns top textual paragraphs if keyword isn't hit)
-        fallback_text = ""
-        paragraphs = [p.strip() for p in self.raw_text.split("\n\n") if p.strip()]
-        matches = [p for p in paragraphs if any(word in p.lower() for word in q_clean.split())]
-        if matches:
-            fallback_text = "\n\n".join(matches[:2])
-        else:
-            fallback_text = self.raw_text[:1200] # Safe snapshot boundary fallback
-            
-        return fallback_text, None
-
-# DYNAMIC ENVIRONMENTAL PATH RESOLUTION FOR SERVERLESS CLOUD RUNTIMES
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE_PATH = os.path.join(BASE_DIR, "sample_data.txt")
-
-# Initialize search engine using absolute dynamic system tracking
 engine = TagIsolatedSearchEngine(DATA_FILE_PATH)
 
 class QueryRequest(BaseModel):
     question: str
     apiKey: str = ""
 
-# 3. GLOBAL SECURE EXECUTION RUNTIME
 @app.post("/ask")
 async def ask_rag(request: QueryRequest):
     start_time = time.time()
-    try:
-        question = request.question.strip()
-        if not question:
-            return {"answer": "Input query was empty.", "latency_ms": 0, "context": "", "online": False}
-        
-        # Staging Match Extraction
-        context_text, topic_name = engine.search(question)
-        
-        # Extract environment key maps
-        api_key = request.apiKey.strip() if request.apiKey.strip() else os.environ.get("GEMINI_API_KEY", "").strip()
-        
-        # Fallback Local Data Streamer
-        if not api_key or api_key == "your_free_key_here":
-            latency_ms = int((time.time() - start_time) * 1000)
-            topic_header = topic_name.upper() if topic_name else "KNOWLEDGE DATABASE SEARCH"
-            return {
-                "answer": (
-                    f"### 🔍 Precise Local Database Match Found\n"
-                    f"*(Topic: {topic_header} • Operational Mode: Tag-Isolated Fallback)*\n\n"
-                    f"{context_text}"
-                ),
-                "latency_ms": latency_ms,
-                "context": context_text,
-                "online": False
-            }
+    context_text, topic = engine.search(request.question)
+    api_key = request.apiKey.strip() or os.environ.get("GEMINI_API_KEY", "")
+    
+    latency_ms = int((time.time() - start_time) * 1000)
 
-        # Active Global Conversational Mode with LLM Generation
-        try:
-            model_name = "gemini-2.5-flash-preview-09-2025"
-            
-            structured_prompt = (
-                f"You are a friendly, highly skilled Python programming tutor.\n"
-                f"Using ONLY the provided reference database context below, answer the user's question accurately.\n"
-                f"If the information is not directly in the context, use your deep general knowledge but mention clearly that you supplemented the database content with general programming concepts.\n\n"
-                f"--- Context from Database ---\n"
-                f"{context_text}\n\n"
-                f"--- User's Question ---\n"
-                f"{question}\n\n"
-                f"Synthesized Response (Format beautiful answers with bold terms, neat bullets, and syntax-highlighted code boxes):"
-            )
-            
-            response_text = ""
-            for attempt in range(3):
-                try:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(structured_prompt)
-                    response_text = response.text
-                    break
-                except Exception as call_err:
-                    if attempt == 2:
-                        raise call_err
-                    time.sleep(1)
-            
-            latency_ms = int((time.time() - start_time) * 1000)
-            return {
-                "answer": f"{response_text}\n\n***\n✨ **RAG Engine Pro:** Dynamically synthesized using active Gemini 2.5 and verified cloud documentation.",
-                "latency_ms": latency_ms,
-                "context": context_text,
-                "online": True
-            }
-            
-        except Exception as api_err:
-            latency_ms = int((time.time() - start_time) * 1000)
-            return {
-                "answer": f"### 🔍 Precise Local Database Match Found\n*(⚠️ Conversational synthesis unavailable: API key verification rejected)*\n\n**System feedback:** {str(api_err)}\n\n---\n\n{context_text}",
-                "latency_ms": latency_ms,
-                "context": context_text,
-                "online": False
-            }
-            
+    if not api_key:
+        return {
+            "answer": f"### Local Match\n{context_text}", 
+            "latency_ms": latency_ms, 
+            "online": False
+        }
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(f"Context: {context_text}\n\nQuestion: {request.question}")
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {"answer": response.text, "latency_ms": latency_ms, "online": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {"answer": f"Error: {str(e)}", "latency_ms": latency_ms, "online": False}
